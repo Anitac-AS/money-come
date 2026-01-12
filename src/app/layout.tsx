@@ -11,10 +11,19 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   title: "錢來了 MoneyIn",
   description: "輕鬆掌握每一筆支出",
+  manifest: "/manifest.json",
   icons: {
-    icon: '/icon.png',
-    apple: '/apple-icon.png',
+    icon: [
+      { url: "/icons/ios/32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/ios/192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/ios/512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/ios/180.png", sizes: "180x180", type: "image/png" },
+    ],
   },
+  themeColor: "#FF8B7B",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 
 export default function RootLayout({
