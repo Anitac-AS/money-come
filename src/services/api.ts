@@ -1,7 +1,7 @@
 // src/services/api.ts
 
-export const GAS_BASE_URL =
-  "https://script.google.com/macros/s/AKfycby699STWvVz8cKCEVphT8xZgJPNy9wGSuvIz-3sVLDqUMyhNH9XI4D-1sbRbj8aDa8q/exec";
+// 修改這裡：優先讀取環境變數，如果沒有（例如本機開發沒設定），才用後面的字串當預備
+export const GAS_BASE_URL = process.env.NEXT_PUBLIC_GAS_API_URL || "https://script.google.com/macros/s/AKfycby699STWvVz8cKCEVphT8xZgJPNy9wGSuvIz-3sVLDqUMyhNH9XI4D-1sbRbj8aDa8q/exec";
 
 // 定義類別與型別
 export type TransactionCategory = string;
