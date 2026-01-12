@@ -9,8 +9,12 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "My Money",
-  description: "Minimal, fast personal finance tracking.",
+  title: "錢來了 MoneyIn",
+  description: "輕鬆掌握每一筆支出",
+  icons: {
+    icon: '/icon.png',
+    apple: '/apple-icon.png',
+  },
 };
 
 export default function RootLayout({
