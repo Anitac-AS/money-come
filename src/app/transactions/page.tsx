@@ -175,8 +175,14 @@ export default function ListPage() {
     if (!editingTransaction) return;
     
     const parsedAmount = Number(editAmount.replace(/[^\d.-]/g, ""));
-    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) return;
-    if (!editDate) return;
+    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) {
+      alert("請輸入有效的金額");
+      return;
+    }
+    if (!editDate) {
+      alert("請選擇日期");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -188,6 +194,9 @@ export default function ListPage() {
         note: editNote || undefined,
       });
       
+      // 觸發更新事件，通知其他頁面
+      window.dispatchEvent(new CustomEvent("transaction:updated"));
+      
       // 重新載入資料
       const data = await getTransactions();
       setTransactions(data);
@@ -195,6 +204,7 @@ export default function ListPage() {
       handleCloseDrawer();
     } catch (err) {
       console.error("更新交易失敗", err);
+      alert("更新交易失敗，請稍後再試");
     } finally {
       setSaving(false);
     }
@@ -210,6 +220,9 @@ export default function ListPage() {
     try {
       await deleteTransaction(editingTransaction.id);
       
+      // 觸發刪除事件，通知其他頁面
+      window.dispatchEvent(new CustomEvent("transaction:deleted"));
+      
       // 重新載入資料
       const data = await getTransactions();
       setTransactions(data);
@@ -217,6 +230,7 @@ export default function ListPage() {
       handleCloseDrawer();
     } catch (err) {
       console.error("刪除交易失敗", err);
+      alert("刪除交易失敗，請稍後再試");
     } finally {
       setDeleting(false);
     }

@@ -36,17 +36,35 @@ interface GasListResponse {
 
 // 統一處理回應的 Helper
 async function handleResponse<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
-  }
-  
   // 因為 GAS 回傳的可能是純文字 JSON，需小心解析
   const text = await res.text();
+  
   try {
-    return JSON.parse(text) as T;
+    const parsed = JSON.parse(text) as T;
+    // 檢查 GAS 回傳的 status 欄位
+    if (typeof parsed === 'object' && parsed !== null && 'status' in parsed) {
+      const response = parsed as { status?: string; message?: string };
+      if (response.status === 'error') {
+        const errorMessage = response.message || '操作失敗';
+        console.error("GAS 後端錯誤:", errorMessage);
+        
+        // 如果是函數未定義的錯誤，提供更清楚的提示
+        if (errorMessage.includes('is not defined')) {
+          throw new Error(`後端函數未實作: ${errorMessage}。請檢查 GAS 後端是否已實作對應的函數。`);
+        }
+        
+        throw new Error(errorMessage);
+      }
+    }
+    return parsed;
   } catch (e) {
+    // 如果已經是 Error 物件（來自上面的 throw），直接重新拋出
+    if (e instanceof Error) {
+      throw e;
+    }
+    // 如果是 JSON 解析錯誤，記錄原始回應
     console.error("JSON Parse Error:", text);
-    throw new Error("無法解析伺服器回應");
+    throw new Error(`無法解析伺服器回應: ${text.substring(0, 100)}`);
   }
 }
 
@@ -162,34 +180,46 @@ export async function updateTransaction(
   id: string,
   payload: Partial<Omit<Transaction, "id">>
 ): Promise<void> {
+  const requestBody = {
+    action: "updateTransaction",
+    data: { id, ...payload } // ID 放進 data 裡面
+  };
+  
+  console.log("更新交易請求:", requestBody);
+  
   const res = await fetch(GAS_BASE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=utf-8",
     },
-    body: JSON.stringify({
-      action: "updateTransaction",
-      data: { id, ...payload } // ID 放進 data 裡面
-    }),
+    body: JSON.stringify(requestBody),
   });
 
-  await handleResponse(res);
+  const result = await handleResponse(res);
+  console.log("更新交易回應:", result);
+  return result;
 }
 
 // 4. 刪除資料 (修正 Payload 結構)
 export async function deleteTransaction(id: string): Promise<void> {
+  const requestBody = {
+    action: "deleteTransaction",
+    data: { id }
+  };
+  
+  console.log("刪除交易請求:", requestBody);
+  
   const res = await fetch(GAS_BASE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=utf-8",
     },
-    body: JSON.stringify({
-      action: "deleteTransaction",
-      data: { id }
-    }),
+    body: JSON.stringify(requestBody),
   });
 
-  await handleResponse(res);
+  const result = await handleResponse(res);
+  console.log("刪除交易回應:", result);
+  return result;
 }
 
 // --- 固定收支相關 ---
@@ -202,6 +232,10 @@ export interface RecurringTransaction {
   note: string;
   dayOfMonth: number; // 每月幾號 (1-31)
   isActive: boolean;
+  // 分期付款相關欄位（可選）
+  totalPeriods?: number; // 總期數，如果設定則為分期付款
+  startDate?: string; // 起始日期 (YYYY-MM-DD)，用於計算已付期數
+  totalAmount?: number; // 總金額，用於計算已付總額和剩餘金額
   createdAt?: string;
   updatedAt?: string;
 }
@@ -216,6 +250,8 @@ interface GasRecurringListResponse {
     type: "支出" | "收入";
     dayOfMonth: number;
     isActive: boolean;
+    startDate?: string; // 起始日期
+    endDate?: string; // 截止日期（GAS 表格中的欄位）
   }>;
   message?: string;
 }
@@ -242,7 +278,7 @@ export async function getRecurringTransactions(): Promise<RecurringTransaction[]
     }
 
     return raw.data.map((item) => {
-      // GAS 返回的欄位順序：id, category, amount, note, type, dayOfMonth, isActive
+      // GAS 返回的欄位順序：id, category, amount, note, type, dayOfMonth, isActive, totalPeriods, startDate, totalAmount
       // isActive 邏輯：GAS 已處理，直接使用其返回值
       // GAS 端會將 false 或 "FALSE" 轉為 false，其他為 true
       const isActiveValue = item.isActive !== false;
@@ -255,6 +291,9 @@ export async function getRecurringTransactions(): Promise<RecurringTransaction[]
         type: item.type === "收入" ? "收入" : "支出",
         dayOfMonth: Number(item.dayOfMonth) || 1,
         isActive: isActiveValue,
+        totalPeriods: item.totalPeriods ? Number(item.totalPeriods) : undefined,
+        startDate: item.startDate ? String(item.startDate) : undefined,
+        totalAmount: item.totalAmount ? Number(item.totalAmount) : undefined,
       };
     });
   } catch (error) {
@@ -272,26 +311,61 @@ export async function addRecurringTransaction(payload: {
   note?: string;
   dayOfMonth: number;
   isActive?: boolean;
+  totalPeriods?: number;
+  startDate?: string;
+  totalAmount?: number;
 }): Promise<any> {
+  // 計算截止日期：如果有起始日期和總期數，計算結束日期
+  let endDate: string | undefined = undefined;
+  if (payload.startDate && payload.totalPeriods) {
+    const start = new Date(payload.startDate);
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + payload.totalPeriods - 1); // 總期數 - 1 個月
+    endDate = end.toISOString().slice(0, 10); // YYYY-MM-DD 格式
+  }
+
+  // 構建 data 物件，按照 GAS 欄位順序：id, 類別, 金額, 備註, 類型, 每月幾號, 起始日期, 截止日期, 啟用狀態
+  const data: any = {
+    category: payload.category,
+    amount: payload.amount,
+    note: payload.note || "",
+    type: payload.type ?? "支出",
+    dayOfMonth: payload.dayOfMonth,
+    isActive: payload.isActive !== false, // 預設為啟用
+  };
+
+  // 添加起始日期（如果存在）
+  if (payload.startDate !== undefined && payload.startDate !== null && payload.startDate !== "") {
+    data.startDate = payload.startDate;
+  }
+
+  // 添加截止日期（如果計算出來了）
+  if (endDate) {
+    data.endDate = endDate;
+  }
+
+  // 注意：totalPeriods 和 totalAmount 不直接發送到 GAS，因為 GAS 表格中沒有這些欄位
+  // 但我們保留在資料結構中，以便前端使用
+
+  const requestBody = {
+    action: "addRecurringTransaction",
+    data: data,
+  };
+
+  console.log("addRecurringTransaction 請求:", JSON.stringify(requestBody, null, 2));
+  console.log("計算的截止日期:", endDate);
+
   const res = await fetch(GAS_BASE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=utf-8",
     },
-    body: JSON.stringify({
-      action: "addRecurringTransaction",
-      data: {
-        category: payload.category,
-        amount: payload.amount,
-        note: payload.note || "",
-        type: payload.type ?? "支出",
-        dayOfMonth: payload.dayOfMonth,
-        isActive: payload.isActive !== false, // 預設為啟用
-      },
-    }),
+    body: JSON.stringify(requestBody),
   });
 
-  return handleResponse(res);
+  const result = await handleResponse(res);
+  console.log("addRecurringTransaction 回應:", result);
+  return result;
 }
 
 // 更新固定收支
@@ -299,7 +373,16 @@ export async function updateRecurringTransaction(
   id: string,
   payload: Partial<Omit<RecurringTransaction, "id">>
 ): Promise<void> {
-  // 確保所有欄位都有值，按照 GAS 期望的順序
+  // 計算截止日期：如果有起始日期和總期數，計算結束日期
+  let endDate: string | undefined = undefined;
+  if (payload.startDate && payload.totalPeriods) {
+    const start = new Date(payload.startDate);
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + payload.totalPeriods - 1); // 總期數 - 1 個月
+    endDate = end.toISOString().slice(0, 10); // YYYY-MM-DD 格式
+  }
+
+  // 確保所有欄位都有值，按照 GAS 欄位順序：id, 類別, 金額, 備註, 類型, 每月幾號, 起始日期, 截止日期, 啟用狀態
   const updateData: any = {
     id: id,
     category: payload.category ?? "",
@@ -310,18 +393,38 @@ export async function updateRecurringTransaction(
     isActive: payload.isActive !== undefined ? payload.isActive : true,
   };
 
+  // 添加起始日期（如果存在）
+  if (payload.startDate !== undefined && payload.startDate !== null && payload.startDate !== "") {
+    updateData.startDate = payload.startDate;
+  }
+
+  // 添加截止日期（如果計算出來了）
+  if (endDate) {
+    updateData.endDate = endDate;
+  }
+
+  // 注意：totalPeriods 和 totalAmount 不直接發送到 GAS，因為 GAS 表格中沒有這些欄位
+  // 但我們保留在資料結構中，以便前端使用
+
+  const requestBody = {
+    action: "updateRecurringTransaction",
+    data: updateData,
+  };
+
+  console.log("updateRecurringTransaction 請求:", JSON.stringify(requestBody, null, 2));
+  console.log("計算的截止日期:", endDate);
+
   const res = await fetch(GAS_BASE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=utf-8",
     },
-    body: JSON.stringify({
-      action: "updateRecurringTransaction",
-      data: updateData,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
-  await handleResponse(res);
+  const result = await handleResponse(res);
+  console.log("updateRecurringTransaction 回應:", result);
+  return result;
 }
 
 // 刪除固定收支
