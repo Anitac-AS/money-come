@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import {
   addTransaction,
   TransactionCategory,
+  TransactionType,
 } from "@/services/api";
 
 const CATEGORIES: TransactionCategory[] = [
@@ -49,6 +50,7 @@ export function MobileShell({ children }: MobileShellProps) {
     return d.toISOString().slice(0, 10);
   });
   const [note, setNote] = useState("");
+  const [transactionType, setTransactionType] = useState<TransactionType>("支出");
   const [submitting, setSubmitting] = useState(false);
 
   const isActive = (path: string) => pathname === path;
@@ -68,7 +70,7 @@ export function MobileShell({ children }: MobileShellProps) {
         category: activeCategory,
         date,
         note: note || undefined,
-        type: "支出",
+        type: transactionType,
       });
 
       window.dispatchEvent(new CustomEvent("transaction:created"));
@@ -81,6 +83,7 @@ export function MobileShell({ children }: MobileShellProps) {
     setAmount("");
     setNote("");
     setActiveCategory("三餐");
+    setTransactionType("支出");
     setDate(new Date().toISOString().slice(0, 10));
     setAddOpen(false);
   };
@@ -89,15 +92,46 @@ export function MobileShell({ children }: MobileShellProps) {
     <div className="flex min-h-svh flex-col" style={{ background: '#FFFFFF' }}>
       <main className="flex-1 page-content" style={{ background: '#FFFFFF' }}>{children}</main>
 
-      <Drawer open={addOpen} onOpenChange={setAddOpen}>
+      <Drawer open={addOpen} onOpenChange={(open) => {
+        setAddOpen(open);
+        if (!open) {
+          // 關閉時重置所有狀態
+          setAmount("");
+          setNote("");
+          setActiveCategory("三餐");
+          setTransactionType("支出");
+          setDate(new Date().toISOString().slice(0, 10));
+        }
+      }}>
         <DrawerContent className="modal">
-          <DrawerTitle className="sr-only">新增支出</DrawerTitle>
+          <DrawerTitle className="sr-only">新增交易</DrawerTitle>
           <div className="modal-header">
-            <div className="modal-title">新增支出</div>
+            <div className="modal-title">新增交易</div>
             <button className="close-btn" onClick={() => setAddOpen(false)}>✕</button>
           </div>
           
           <form onSubmit={handleSubmit}>
+            {/* 類型切換 */}
+            <div className="form-group">
+              <label className="form-label">類型</label>
+              <div className="type-toggle">
+                <button
+                  type="button"
+                  className={`type-btn ${transactionType === "支出" ? "expense" : ""}`}
+                  onClick={() => setTransactionType("支出")}
+                >
+                  支出
+                </button>
+                <button
+                  type="button"
+                  className={`type-btn ${transactionType === "收入" ? "income" : ""}`}
+                  onClick={() => setTransactionType("收入")}
+                >
+                  收入
+                </button>
+              </div>
+            </div>
+
             <div className="form-group">
               <label className="form-label">金額</label>
               <input
@@ -149,7 +183,7 @@ export function MobileShell({ children }: MobileShellProps) {
             </div>
             
             <button type="submit" className="submit-btn" disabled={submitting}>
-              {submitting ? "儲存中..." : "儲存這筆支出"}
+              {submitting ? "儲存中..." : `儲存這筆${transactionType === "支出" ? "支出" : "收入"}`}
             </button>
           </form>
         </DrawerContent>

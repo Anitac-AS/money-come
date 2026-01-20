@@ -137,7 +137,18 @@ export default function ListPage() {
       .sort((a, b) => b.localeCompare(a))
       .map(date => ({
         date,
-        items: groups[date].sort((a, b) => b.date.localeCompare(a.date)) // 同一天內也按時間排序
+        // 同一天內按建立時間排序（越後面建立的排越前面）
+        items: groups[date].sort((a, b) => {
+          // 如果有建立時間，按建立時間排序
+          if (a.createdAt && b.createdAt) {
+            return b.createdAt.localeCompare(a.createdAt);
+          }
+          // 如果只有一個有建立時間，有時間的排在前面
+          if (a.createdAt && !b.createdAt) return -1;
+          if (!a.createdAt && b.createdAt) return 1;
+          // 如果都沒有建立時間，按 id 倒序排列（作為備用方案）
+          return b.id.localeCompare(a.id);
+        })
       }));
   }, [filteredTransactions]);
 
@@ -271,9 +282,17 @@ export default function ListPage() {
           <p style={{ color: 'var(--text-medium)', fontSize: '14px' }}>這個月份沒有交易紀錄</p>
         </div>
       ) : (
-        groupedTransactions.map(group => (
+        groupedTransactions.map(group => {
+          // 計算當天的小計（只計算支出）
+          const dayTotal = group.items
+            .filter(tx => tx.type === "支出")
+            .reduce((sum, tx) => sum + tx.amount, 0);
+          
+          return (
           <div key={group.date}>
-            <div className="month-label">{group.date}</div>
+            <div className="month-label">
+              {group.date} 小計 {formatCurrency(dayTotal)} 元
+            </div>
             {group.items.map(tx => {
               const isIncome = tx.type === "收入";
               const IconComponent = categoryIconMap[tx.category as CategoryType];
@@ -310,7 +329,8 @@ export default function ListPage() {
               );
             })}
           </div>
-        ))
+          );
+        })
       )}
 
       {/* 編輯 Modal */}

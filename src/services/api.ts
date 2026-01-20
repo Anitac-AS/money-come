@@ -15,6 +15,7 @@ export interface Transaction {
   date: string; // ISO string yyyy-mm-dd
   note: string;
   type: TransactionType;
+  createdAt?: string; // 建立時間 (ISO string)，用於排序
 }
 
 // GAS 回傳的原始資料介面（支援兩種格式）
@@ -25,6 +26,7 @@ type GasTransactionItem = {
   amount: number;
   note: string;
   type: "支出" | "收入";
+  createdAt?: string; // 建立時間 (ISO string)，可選
 };
 
 interface GasListResponse {
@@ -116,6 +118,7 @@ export async function getTransactions(): Promise<Transaction[]> {
         amount: Number(item.amount) || 0, // 確保是數字
         note: String(item.note || ""),
         type: (item.type === "收入" ? "收入" : "支出") as TransactionType,
+        createdAt: item.createdAt ? String(item.createdAt) : undefined, // 建立時間
       };
     }).filter((item): item is Transaction => {
       // 過濾掉無效日期的項目

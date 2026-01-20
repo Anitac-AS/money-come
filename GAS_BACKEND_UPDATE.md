@@ -4,6 +4,8 @@
 
 目前 GAS 後端缺少 `updateTransaction` 和 `deleteTransaction` 函數，導致前端無法更新和刪除交易。
 
+另外，為了正確排序交易記錄（越後面建立的排越前面），需要在交易記錄中添加 `createdAt`（建立時間）欄位。
+
 ## 需要實作的函數
 
 ### 1. updateTransaction 函數
@@ -185,3 +187,64 @@ function doPost(e) {
   }
 }
 ```
+
+## 添加 createdAt 欄位（用於排序）
+
+為了讓交易記錄能夠按照建立時間正確排序（越後面建立的排越前面），需要在 Google Sheets 的「交易記錄」分頁中添加 `createdAt` 欄位。
+
+### 1. 在 Google Sheets 中添加欄位
+
+在「交易記錄」分頁的標題列添加 `createdAt` 欄位（建議放在最後一欄）。
+
+### 2. 更新 `addTransaction` 函數
+
+在新增交易時，自動記錄建立時間：
+
+```javascript
+function addTransaction(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("交易記錄");
+  
+  if (!sheet) {
+    throw new Error("找不到交易記錄 Sheet");
+  }
+
+  // 生成 UUID
+  const id = Utilities.getUuid();
+  
+  // 獲取當前時間（ISO 格式：YYYY-MM-DDTHH:mm:ss.sssZ）
+  const createdAt = new Date().toISOString();
+  
+  // 根據你的欄位順序調整
+  // 假設欄位順序：id, 日期, 類別, 金額, 備註, 類型, createdAt
+  const newRow = [
+    id,
+    data.date || new Date().toISOString().split('T')[0], // 日期
+    data.category || "",
+    data.amount || 0,
+    data.note || "",
+    data.type || "支出",
+    createdAt // 建立時間
+  ];
+  
+  sheet.appendRow(newRow);
+  
+  return ContentService.createTextOutput(
+    JSON.stringify({
+      status: "success",
+      message: "新增成功",
+      id: id
+    })
+  ).setMimeType(ContentService.MimeType.JSON);
+}
+```
+
+### 3. 更新 `getTransactions` 函數
+
+確保返回 `createdAt` 欄位（如果已經存在，應該會自動返回）。
+
+### 4. 處理舊資料
+
+對於舊的資料（沒有 `createdAt` 欄位），前端會使用 `id` 作為備用排序方案。如果需要為舊資料補上 `createdAt`，可以在 Google Sheets 中使用公式或手動填入。
+
+**注意**：如果 GAS 後端沒有返回 `createdAt` 欄位，前端會使用 `id` 作為備用排序方案，但這可能不如使用實際的建立時間準確。
