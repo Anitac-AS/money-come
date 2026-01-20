@@ -15,7 +15,6 @@ export interface Transaction {
   date: string; // ISO string yyyy-mm-dd
   note: string;
   type: TransactionType;
-  createdAt?: string; // 建立時間 (ISO string)，用於排序
 }
 
 // GAS 回傳的原始資料介面（支援兩種格式）
@@ -26,7 +25,7 @@ type GasTransactionItem = {
   amount: number;
   note: string;
   type: "支出" | "收入";
-  createdAt?: string; // 建立時間 (ISO string)，可選
+  createdAt?: string; // 建立時間 (YYYY-MM-DD HH:MM:SS 或 ISO 格式)
 };
 
 interface GasListResponse {
@@ -109,28 +108,38 @@ export async function getTransactions(): Promise<Transaction[]> {
     }
 
     // 資料清洗與轉換
-    const processed = items
-      .map((item) => {
-        const parsedDate = parseDate(item.date);
-        return {
-          id: String(item.id), // 強制轉字串，確保統一
-          date: parsedDate, // 處理日期格式問題
-          category: String(item.category || ""),
-          amount: Number(item.amount) || 0, // 確保是數字
-          note: String(item.note || ""),
-          type: (item.type === "收入" ? "收入" : "支出") as TransactionType,
-          createdAt: item.createdAt ? String(item.createdAt) : undefined, // 建立時間
-        };
-      })
-      .filter((item) => {
-        // 過濾掉無效日期的項目
-        if (!item.date || !/^\d{4}-\d{2}-\d{2}$/.test(item.date)) {
-          return false;
+    const processed: Transaction[] = items.map((item) => {
+      const parsedDate = parseDate(item.date);
+      // 處理 createdAt：可能是 "YYYY-MM-DD HH:MM:SS" 格式，需要轉換為 ISO 格式以便排序
+      let createdAt: string | undefined = undefined;
+      if (item.createdAt) {
+        const createdAtStr = String(item.createdAt).trim();
+        // 如果是 "YYYY-MM-DD HH:MM:SS" 格式，轉換為 ISO 格式
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(createdAtStr)) {
+          createdAt = createdAtStr.replace(' ', 'T') + '.000Z';
+        } else {
+          createdAt = createdAtStr;
         }
-        // 驗證年份合理性（2000-2100）
-        const year = parseInt(item.date.substring(0, 4));
-        return year >= 2000 && year <= 2100;
-      }) as Transaction[];
+      }
+      
+      return {
+        id: String(item.id), // 強制轉字串，確保統一
+        date: parsedDate, // 處理日期格式問題
+        category: String(item.category || ""),
+        amount: Number(item.amount) || 0, // 確保是數字
+        note: String(item.note || ""),
+        type: (item.type === "收入" ? "收入" : "支出") as TransactionType,
+        createdAt: createdAt, // 建立時間
+      };
+    }).filter((item): item is Transaction => {
+      // 過濾掉無效日期的項目
+      if (!item.date || !/^\d{4}-\d{2}-\d{2}$/.test(item.date)) {
+        return false;
+      }
+      // 驗證年份合理性（2000-2100）
+      const year = parseInt(item.date.substring(0, 4));
+      return year >= 2000 && year <= 2100;
+    });
     
     // 調試：顯示處理後的資料統計
     if (processed.length > 0) {

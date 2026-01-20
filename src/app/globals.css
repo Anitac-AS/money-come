@@ -733,6 +733,9 @@ body {
   position: sticky;
   top: 88px;
   z-index: 9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .detail-item {

@@ -124,31 +124,37 @@ export default function ListPage() {
   const monthOptions = useMemo(() => getUniqueMonths(transactions), [transactions]);
 
   // 4. 按日期分組顯示 (Grouping)
+  // 先按建立時間排序，然後再按日期分組
   const groupedTransactions = useMemo(() => {
+    // 先按照建立時間戳記排序（由最新的往下排到較舊的）
+    const sortedByCreatedAt = [...filteredTransactions].sort((a, b) => {
+      // 優先使用建立時間排序
+      if (a.createdAt && b.createdAt) {
+        return b.createdAt.localeCompare(a.createdAt);
+      }
+      // 如果只有一個有建立時間，有時間的排在前面
+      if (a.createdAt && !b.createdAt) return -1;
+      if (!a.createdAt && b.createdAt) return 1;
+      // 如果都沒有建立時間，按 id 倒序排列（作為備用方案）
+      return b.id.localeCompare(a.id);
+    });
+
+    // 然後按日期分組
     const groups: Record<string, Transaction[]> = {};
-    filteredTransactions.forEach(t => {
+    sortedByCreatedAt.forEach(t => {
       if (t.date && t.date.length >= 10) {
         if (!groups[t.date]) groups[t.date] = [];
         groups[t.date].push(t);
       }
     });
+    
     // 日期排序 (新到舊)，使用 localeCompare 確保正確排序
     return Object.keys(groups)
       .sort((a, b) => b.localeCompare(a))
       .map(date => ({
         date,
-        // 同一天內按建立時間排序（越後面建立的排越前面）
-        items: groups[date].sort((a, b) => {
-          // 如果有建立時間，按建立時間排序
-          if (a.createdAt && b.createdAt) {
-            return b.createdAt.localeCompare(a.createdAt);
-          }
-          // 如果只有一個有建立時間，有時間的排在前面
-          if (a.createdAt && !b.createdAt) return -1;
-          if (!a.createdAt && b.createdAt) return 1;
-          // 如果都沒有建立時間，按 id 倒序排列（作為備用方案）
-          return b.id.localeCompare(a.id);
-        })
+        // 同一天內的項目已經按建立時間排序好了，直接使用
+        items: groups[date]
       }));
   }, [filteredTransactions]);
 
@@ -291,7 +297,8 @@ export default function ListPage() {
           return (
           <div key={group.date}>
             <div className="month-label">
-              {group.date} 小計 {formatCurrency(dayTotal)} 元
+              <span>{group.date}</span>
+              <span>小計 {formatCurrency(dayTotal)} 元</span>
             </div>
             {group.items.map(tx => {
               const isIncome = tx.type === "收入";

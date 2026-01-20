@@ -179,15 +179,9 @@ export default function HomePage() {
     weekAgo.setHours(0, 0, 0, 0);
     const weekAgoStr = weekAgo.toISOString().split('T')[0];
 
-    // 排序：最新的在最上面
-    // 先按日期排序（降序），如果日期相同，則按建立時間排序（越後面建立的排越前面）
+    // 排序：按照建立時間戳記，由最新的往下排到較舊的
     const sorted = [...validTxs].sort((a, b) => {
-      if (!a.date || !b.date) return 0;
-      // 先按日期降序排列
-      const dateCompare = b.date.localeCompare(a.date);
-      if (dateCompare !== 0) return dateCompare;
-      
-      // 如果日期相同，按建立時間排序（越後面建立的排越前面）
+      // 優先使用建立時間排序
       if (a.createdAt && b.createdAt) {
         return b.createdAt.localeCompare(a.createdAt);
       }
