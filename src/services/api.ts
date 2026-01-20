@@ -195,9 +195,8 @@ export async function updateTransaction(
     body: JSON.stringify(requestBody),
   });
 
-  const result = await handleResponse(res);
-  console.log("更新交易回應:", result);
-  return result;
+  await handleResponse(res);
+  console.log("更新交易完成");
 }
 
 // 4. 刪除資料 (修正 Payload 結構)
@@ -217,9 +216,8 @@ export async function deleteTransaction(id: string): Promise<void> {
     body: JSON.stringify(requestBody),
   });
 
-  const result = await handleResponse(res);
-  console.log("刪除交易回應:", result);
-  return result;
+  await handleResponse(res);
+  console.log("刪除交易完成");
 }
 
 // --- 固定收支相關 ---
@@ -252,6 +250,7 @@ interface GasRecurringListResponse {
     isActive: boolean;
     startDate?: string; // 起始日期
     endDate?: string; // 截止日期（GAS 表格中的欄位）
+    totalAmount?: number; // 總金額（可選）
   }>;
   message?: string;
 }
@@ -277,11 +276,24 @@ export async function getRecurringTransactions(): Promise<RecurringTransaction[]
       return [];
     }
 
+    // 輔助函數：從 startDate 和 endDate 計算總期數
+    const calculatePeriods = (startDate: string, endDate: string): number => {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+      return Math.max(1, months); // 至少 1 期
+    };
+
     return raw.data.map((item) => {
-      // GAS 返回的欄位順序：id, category, amount, note, type, dayOfMonth, isActive, totalPeriods, startDate, totalAmount
+      // GAS 返回的欄位順序：id, category, amount, note, type, dayOfMonth, isActive, startDate, endDate
       // isActive 邏輯：GAS 已處理，直接使用其返回值
       // GAS 端會將 false 或 "FALSE" 轉為 false，其他為 true
       const isActiveValue = item.isActive !== false;
+
+      // 從 startDate 和 endDate 計算 totalPeriods
+      const totalPeriods = (item.startDate && item.endDate) 
+        ? calculatePeriods(item.startDate, item.endDate) 
+        : undefined;
 
       return {
         id: String(item.id),
@@ -291,7 +303,7 @@ export async function getRecurringTransactions(): Promise<RecurringTransaction[]
         type: item.type === "收入" ? "收入" : "支出",
         dayOfMonth: Number(item.dayOfMonth) || 1,
         isActive: isActiveValue,
-        totalPeriods: item.totalPeriods ? Number(item.totalPeriods) : undefined,
+        totalPeriods: totalPeriods,
         startDate: item.startDate ? String(item.startDate) : undefined,
         totalAmount: item.totalAmount ? Number(item.totalAmount) : undefined,
       };
@@ -422,9 +434,8 @@ export async function updateRecurringTransaction(
     body: JSON.stringify(requestBody),
   });
 
-  const result = await handleResponse(res);
-  console.log("updateRecurringTransaction 回應:", result);
-  return result;
+  await handleResponse(res);
+  console.log("updateRecurringTransaction 完成");
 }
 
 // 刪除固定收支
