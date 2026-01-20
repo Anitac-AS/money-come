@@ -109,26 +109,28 @@ export async function getTransactions(): Promise<Transaction[]> {
     }
 
     // 資料清洗與轉換
-    const processed: Transaction[] = items.map((item) => {
-      const parsedDate = parseDate(item.date);
-      return {
-        id: String(item.id), // 強制轉字串，確保統一
-        date: parsedDate, // 處理日期格式問題
-        category: String(item.category || ""),
-        amount: Number(item.amount) || 0, // 確保是數字
-        note: String(item.note || ""),
-        type: (item.type === "收入" ? "收入" : "支出") as TransactionType,
-        createdAt: item.createdAt ? String(item.createdAt) : undefined, // 建立時間
-      };
-    }).filter((item): item is Transaction => {
-      // 過濾掉無效日期的項目
-      if (!item.date || !/^\d{4}-\d{2}-\d{2}$/.test(item.date)) {
-        return false;
-      }
-      // 驗證年份合理性（2000-2100）
-      const year = parseInt(item.date.substring(0, 4));
-      return year >= 2000 && year <= 2100;
-    });
+    const processed = items
+      .map((item) => {
+        const parsedDate = parseDate(item.date);
+        return {
+          id: String(item.id), // 強制轉字串，確保統一
+          date: parsedDate, // 處理日期格式問題
+          category: String(item.category || ""),
+          amount: Number(item.amount) || 0, // 確保是數字
+          note: String(item.note || ""),
+          type: (item.type === "收入" ? "收入" : "支出") as TransactionType,
+          createdAt: item.createdAt ? String(item.createdAt) : undefined, // 建立時間
+        };
+      })
+      .filter((item) => {
+        // 過濾掉無效日期的項目
+        if (!item.date || !/^\d{4}-\d{2}-\d{2}$/.test(item.date)) {
+          return false;
+        }
+        // 驗證年份合理性（2000-2100）
+        const year = parseInt(item.date.substring(0, 4));
+        return year >= 2000 && year <= 2100;
+      }) as Transaction[];
     
     // 調試：顯示處理後的資料統計
     if (processed.length > 0) {
