@@ -15,6 +15,7 @@ export interface Transaction {
   date: string; // ISO string yyyy-mm-dd
   note: string;
   type: TransactionType;
+  createdAt?: string; // 建立時間 (ISO string)，用於排序
 }
 
 // GAS 回傳的原始資料介面（支援兩種格式）
