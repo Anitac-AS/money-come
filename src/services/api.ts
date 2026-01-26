@@ -115,32 +115,27 @@ export async function getTransactions(): Promise<Transaction[]> {
         // 處理 createdAt：可能是多種格式，統一轉換為 ISO 格式以便排序
         let createdAt: string | undefined = undefined;
         if (item.createdAt) {
-          // 如果已經是 Date 對象，直接轉換為 ISO 字符串
-          if (item.createdAt instanceof Date) {
-            createdAt = item.createdAt.toISOString();
+          const createdAtStr = String(item.createdAt).trim();
+          
+          // 嘗試解析為 Date 對象（適用於各種格式，包括 Date 對象的字符串表示）
+          const parsedDate = new Date(createdAtStr);
+          if (!isNaN(parsedDate.getTime())) {
+            // 成功解析，轉換為 ISO 格式
+            createdAt = parsedDate.toISOString();
           } else {
-            const createdAtStr = String(item.createdAt).trim();
-            
-            // 嘗試解析為 Date 對象（適用於各種格式）
-            const parsedDate = new Date(createdAtStr);
-            if (!isNaN(parsedDate.getTime())) {
-              // 成功解析，轉換為 ISO 格式
-              createdAt = parsedDate.toISOString();
-            } else {
-              // 如果無法解析，嘗試匹配特定格式
-              // 格式 1: "YYYY-MM-DD HH:MM:SS"
-              if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(createdAtStr)) {
-                createdAt = createdAtStr.replace(' ', 'T') + '.000Z';
-              } 
-              // 格式 2: 已經是 ISO 格式
-              else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(createdAtStr)) {
-                createdAt = createdAtStr;
-              } 
-              // 其他格式，保留原值（但可能排序不準確）
-              else {
-                console.warn("無法解析 createdAt 格式:", createdAtStr);
-                createdAt = createdAtStr;
-              }
+            // 如果無法解析，嘗試匹配特定格式
+            // 格式 1: "YYYY-MM-DD HH:MM:SS"
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(createdAtStr)) {
+              createdAt = createdAtStr.replace(' ', 'T') + '.000Z';
+            } 
+            // 格式 2: 已經是 ISO 格式
+            else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(createdAtStr)) {
+              createdAt = createdAtStr;
+            } 
+            // 其他格式，保留原值（但可能排序不準確）
+            else {
+              console.warn("無法解析 createdAt 格式:", createdAtStr);
+              createdAt = createdAtStr;
             }
           }
         }
