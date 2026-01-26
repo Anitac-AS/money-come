@@ -181,14 +181,22 @@ export default function HomePage() {
 
     // 排序：按照建立時間戳記，由最新的往下排到較舊的
     const sorted = [...validTxs].sort((a, b) => {
-      // 優先使用建立時間排序
+      // 優先使用建立時間排序（降序：最新的在前）
       if (a.createdAt && b.createdAt) {
-        return b.createdAt.localeCompare(a.createdAt);
+        const compare = b.createdAt.localeCompare(a.createdAt);
+        // 如果 createdAt 相同，使用日期作為次要排序
+        if (compare === 0) {
+          return b.date.localeCompare(a.date);
+        }
+        return compare;
       }
       // 如果只有一個有建立時間，有時間的排在前面
       if (a.createdAt && !b.createdAt) return -1;
       if (!a.createdAt && b.createdAt) return 1;
-      // 如果都沒有建立時間，按 id 倒序排列（作為備用方案）
+      // 如果都沒有建立時間，按日期倒序排列（作為備用方案）
+      const dateCompare = b.date.localeCompare(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      // 如果日期也相同，按 id 倒序排列
       return b.id.localeCompare(a.id);
     });
 
@@ -223,7 +231,7 @@ export default function HomePage() {
     const recents = sorted.slice(0, 5);
 
     // 調試信息
-    console.log("計算統計:", {
+    console.log("📈 首頁統計計算:", {
       totalTransactions: txs.length,
       validTransactions: validTxs.length,
       currentMonth: currentMonthPrefix,
@@ -231,7 +239,19 @@ export default function HomePage() {
       monthTotal: mTotal,
       weeklyTotal: wTotal,
       recentCount: recents.length,
-      sampleDates: sorted.slice(0, 5).map(t => t.date)
+      recentFiveDetails: recents.map(t => ({
+        date: t.date,
+        createdAt: t.createdAt,
+        id: t.id,
+        category: t.category,
+        amount: t.amount
+      })),
+      // 檢查排序邏輯：顯示前10筆的 createdAt 和 date
+      top10CreatedAt: sorted.slice(0, 10).map(t => ({
+        date: t.date,
+        createdAt: t.createdAt,
+        id: t.id.substring(0, 8) + '...'
+      }))
     });
 
     return { 

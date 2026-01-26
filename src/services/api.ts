@@ -112,15 +112,36 @@ export async function getTransactions(): Promise<Transaction[]> {
     const processed = items
       .map((item) => {
         const parsedDate = parseDate(item.date);
-        // 處理 createdAt：可能是 "YYYY-MM-DD HH:MM:SS" 格式，需要轉換為 ISO 格式以便排序
+        // 處理 createdAt：可能是多種格式，統一轉換為 ISO 格式以便排序
         let createdAt: string | undefined = undefined;
         if (item.createdAt) {
-          const createdAtStr = String(item.createdAt).trim();
-          // 如果是 "YYYY-MM-DD HH:MM:SS" 格式，轉換為 ISO 格式
-          if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(createdAtStr)) {
-            createdAt = createdAtStr.replace(' ', 'T') + '.000Z';
+          // 如果已經是 Date 對象，直接轉換為 ISO 字符串
+          if (item.createdAt instanceof Date) {
+            createdAt = item.createdAt.toISOString();
           } else {
-            createdAt = createdAtStr;
+            const createdAtStr = String(item.createdAt).trim();
+            
+            // 嘗試解析為 Date 對象（適用於各種格式）
+            const parsedDate = new Date(createdAtStr);
+            if (!isNaN(parsedDate.getTime())) {
+              // 成功解析，轉換為 ISO 格式
+              createdAt = parsedDate.toISOString();
+            } else {
+              // 如果無法解析，嘗試匹配特定格式
+              // 格式 1: "YYYY-MM-DD HH:MM:SS"
+              if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(createdAtStr)) {
+                createdAt = createdAtStr.replace(' ', 'T') + '.000Z';
+              } 
+              // 格式 2: 已經是 ISO 格式
+              else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(createdAtStr)) {
+                createdAt = createdAtStr;
+              } 
+              // 其他格式，保留原值（但可能排序不準確）
+              else {
+                console.warn("無法解析 createdAt 格式:", createdAtStr);
+                createdAt = createdAtStr;
+              }
+            }
           }
         }
         
@@ -144,16 +165,56 @@ export async function getTransactions(): Promise<Transaction[]> {
         return year >= 2000 && year <= 2100;
       }) as Transaction[];
     
-    // 調試：顯示處理後的資料統計
+    // 調試：顯示處理後的資料統計和排序資訊
     if (processed.length > 0) {
-      const sorted = [...processed].sort((a, b) => b.date.localeCompare(a.date));
-      console.log("載入的交易資料:", {
+      const sortedByDate = [...processed].sort((a, b) => b.date.localeCompare(a.date));
+      const sortedByCreatedAt = [...processed].sort((a, b) => {
+        if (a.createdAt && b.createdAt) {
+          return b.createdAt.localeCompare(a.createdAt);
+        }
+        if (a.createdAt && !b.createdAt) return -1;
+        if (!a.createdAt && b.createdAt) return 1;
+        return b.id.localeCompare(a.id);
+      });
+      
+      // 找出原始資料中對應的 createdAt 原始值
+      const itemsMap = new Map(items.map(i => [String(i.id), i]));
+      
+      console.log("📊 交易資料處理統計:", {
         total: processed.length,
+        withCreatedAt: processed.filter(t => t.createdAt).length,
+        withoutCreatedAt: processed.filter(t => !t.createdAt).length,
+        top5ByDate: sortedByDate.slice(0, 5).map(t => ({ date: t.date, createdAt: t.createdAt, id: t.id })),
+        top5ByCreatedAt: sortedByCreatedAt.slice(0, 5).map(t => {
+          const original = itemsMap.get(t.id);
+          return {
+            date: t.date,
+            createdAt: t.createdAt,
+            createdAtRaw: original?.createdAt,
+            id: t.id
+          };
+        }),
         dateRange: {
-          earliest: sorted[sorted.length - 1]?.date,
-          latest: sorted[0]?.date
+          earliest: sortedByDate[sortedByDate.length - 1]?.date,
+          latest: sortedByDate[0]?.date
         },
-        sample: sorted.slice(0, 3).map(t => ({ date: t.date, category: t.category, amount: t.amount }))
+        // 檢查最新的5筆和最早的5筆（按 createdAt 排序）
+        newest5WithCreatedAt: sortedByCreatedAt.slice(0, 5).map(t => {
+          const original = itemsMap.get(t.id);
+          return {
+            date: t.date,
+            createdAt: t.createdAt,
+            createdAtRaw: original?.createdAt
+          };
+        }),
+        oldest5WithCreatedAt: sortedByCreatedAt.slice(-5).map(t => {
+          const original = itemsMap.get(t.id);
+          return {
+            date: t.date,
+            createdAt: t.createdAt,
+            createdAtRaw: original?.createdAt
+          };
+        })
       });
     }
     
